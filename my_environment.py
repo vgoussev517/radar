@@ -43,8 +43,8 @@ class Lissajous_3D_Gen:
         return self.speed
 
 
-# class My_Radar(Agent):
-class My_Radar(QThread):
+# class My_Environment(Agent):
+class My_Environment(QThread):
     def __init__(self, name, parent=None):
         # super().__init__(name)
         super().__init__(parent)
@@ -106,15 +106,15 @@ if __name__ == "__main__":
     window = My_Main_Window("Main Window")
     window.show()
 
-    radar = My_Radar("Top")
-    radar.create_random_target()
-    radar.create_random_target()
-    radar.create_random_target()
+    env = My_Environment("Top")
+    env.create_random_target()
+    env.create_random_target()
+    env.create_random_target()
 
-    window.setCentralWidget(radar.viewer)
+    window.setCentralWidget(env.viewer)
 
     # radar.start()
-    radar.run()
+    env.run()
     print("AAA")
 
     app.exec()
