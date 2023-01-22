@@ -1,0 +1,6 @@
+# Python projects
+*.log
+*.pyc
+venv/
+.idea/
+__pycache__/
