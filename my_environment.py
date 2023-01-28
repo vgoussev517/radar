@@ -8,7 +8,8 @@ from PyQt5.QtCore import Qt, QThread
 from PyQt5.QtGui import QColor
 
 from agent import Agent
-from my_3d_viewer import Point_3D, My_3D_Viewer_Widget
+from my_3d_viewer import My_3D_Viewer_Widget
+from point_3d import Point_3D
 
 
 # class Lissajous_3D_Gen(Agent):
@@ -53,16 +54,16 @@ class My_Environment(QThread):
         self.viewer = My_3D_Viewer_Widget(self.scene_box)
         self.dt = 0.05
         self.track_tail_length = 100
-        self.targets = 0
+        self.n_of_targets = 0
         self.targets_gens = []
-        self.targets_tracks = []
+        self.viewer_target_tracks = []
         pass
 
     def run(self):
         while True:
-            for i in range(0, self.targets):
+            for i in range(0, self.n_of_targets):
                 pos = self.targets_gens[i].next_position(self.dt)
-                self.targets_tracks[i].move_to(pos)
+                self.viewer_target_tracks[i].move_to(pos)
             self.msleep(int(self.dt*1000))
             QApplication.processEvents()
             # print("BBB")
@@ -71,7 +72,7 @@ class My_Environment(QThread):
 
     def create_random_target(self, name: string = None, color: QColor = None) -> Lissajous_3D_Gen:
         if name is None:
-            target_name = "X"+str(self.targets)
+            target_name = "X"+str(self.n_of_targets)
         else:
             target_name = name
         if color is None:
@@ -88,19 +89,31 @@ class My_Environment(QThread):
         gen = Lissajous_3D_Gen(target_name+"_Gen", center, amplitude, freq, phase)
         self.targets_gens.append(gen)
         #
-        track = self.viewer.add_new_track(target_name, target_color, gen.get_position())
+        track = self.viewer.add_new_track(name=target_name, color=target_color, initial_pos=gen.get_position())
         track.set_tail_len(self.track_tail_length)
-        self.targets_tracks.append(track)
+        self.viewer_target_tracks.append(track)
         #
-        self.targets = self.targets + 1
+        self.n_of_targets = self.n_of_targets + 1
         return gen
+
+    def add_target(self, name: string, color: QColor, gen: Lissajous_3D_Gen, track_tail_length=None):
+        if track_tail_length is None:
+            target_track_tail_length = self.track_tail_length
+        else:
+            target_track_tail_length = track_tail_length
+        self.targets_gens.append(gen)
+        track = self.viewer.add_new_track(name=name, color=color, initial_pos=gen.get_position())
+        track.set_tail_len(target_track_tail_length)
+        self.viewer_target_tracks.append(track)
+        self.n_of_targets = self.n_of_targets + 1
+        pass
 
 
 if __name__ == "__main__":
     import sys
     from PyQt5.QtCore import Qt, QThread
-    from PyQt5.QtWidgets import QApplication, QHBoxLayout
-    from my_widgets import My_Main_Window, My_Track_Graph_Widget, My_Track_Object
+    from PyQt5.QtWidgets import QApplication
+    from my_widgets import My_Main_Window
 
     app = QApplication(sys.argv)
     window = My_Main_Window("Main Window")
@@ -111,9 +124,17 @@ if __name__ == "__main__":
     env.create_random_target()
     env.create_random_target()
 
+    center = env.scene_box.mul(Point_3D(3/4, 1/2, 1/2))
+    amplitude = env.scene_box.mul(Point_3D(1/8, 1/4, -1/4))
+    freq = Point_3D(0.2, 0.4/3, 0.4)
+    phase = Point_3D(3.14/4, +0.1, +0.1)
+    # freq = Point_3D(0.8/3, 0.4/3, 0.4)
+    # phase = Point_3D(+3.14*1/4.0, +3.14*1/4, 3.14*3/4+0.1)
+    gen_x = Lissajous_3D_Gen("Gen_x", center, amplitude, freq, phase)
+    env.add_target(name="gen_x", color=Qt.red, gen=gen_x, track_tail_length=1000)
+
     window.setCentralWidget(env.viewer)
 
-    # radar.start()
     env.run()
     print("AAA")
 

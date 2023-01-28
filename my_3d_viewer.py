@@ -1,5 +1,4 @@
 import string
-from random import random
 
 from PyQt5.QtCore import QSize, Qt, QRectF, QSizeF
 from PyQt5.QtGui import QPen, QColor
@@ -7,38 +6,7 @@ from PyQt5.QtWidgets import QWidget, QGridLayout, QHBoxLayout, QGroupBox, \
     QGraphicsView, QGraphicsScene, QGraphicsItemGroup, \
     QGraphicsEllipseItem, QGraphicsSimpleTextItem, QGraphicsLineItem
 
-
-class Point_3D:
-    def __init__(self, d, w, h):
-        self.d = d
-        self.w = w
-        self.h = h
-
-    def print(self, msg=None):
-        if msg is None:
-            print("3d point: ({0:f}, {1:f}, {2:f})".format(self.d, self.w, self.h))
-        else:
-            print("{0}: ({1:f}, {2:f}, {3:f})".format(msg, self.d, self.w, self.h))
-
-    def move_to(self, d, w, h):
-        self.d = d
-        self.w = w
-        self.h = h
-
-    def add(self, x):
-        return Point_3D(self.d+x.d, self.w+x.w, self.h+x.h)
-
-    def sub(self, x):
-        return Point_3D(self.d-x.d, self.w-x.w, self.h-x.h)
-
-    def mul(self, x):
-        return Point_3D(self.d*x.d, self.w*x.w, self.h*x.h)
-
-    def scale(self, x: float):
-        return Point_3D(self.d*x, self.w*x, self.h*x)
-
-    def random(self):
-        return Point_3D(self.d*random(), self.w*random(), self.h*random())
+from point_3d import Point_3D
 
 
 class My_2D_Track_tail(QGraphicsItemGroup):

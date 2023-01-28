@@ -1,4 +1,6 @@
 # Radar messages structures
+from copy import deepcopy
+
 
 class RM_Field_Record:
     BE = 0
@@ -10,8 +12,8 @@ class RM_Field_Record:
         self.order = order
         self.value = value
 
-    def print(self, msg):
-        print("{0}{1:28} size={2:>3},  value=0x{3:X}".format(msg, self.name+":", self.size, self.value))
+    def print(self, ident):
+        print("{0}{1:28} size={2:>3},  value=0x{3:X}".format(ident, self.name+":", self.size, self.value))
         pass
 
 
@@ -35,20 +37,38 @@ class RM_Message:
     FP_16G7 = 0x04     # Radar frequency (GHz)
     OFF = 0x00         # Transmit switch
     ON = 0x01          # Transmit switch
+    TS_TWS = 0x01      # Track status
+    TS_TASS = 0x02     # Track status
+    TS_TAST = 0x03     # Track status
+    TS_GAZE = 0x04     # Track status
+    TA_UNKNOWN = 0x00           # Target attributed
+    TA_SINGLE_PERSON = 0x01     # Target attributed
+    TA_MULTIPLE_PERSONS = 0x02  # Target attributed
+    TA_VEHICLE = 0x03           # Target attributed
+    TA_LARGE_BOATS = 0x04       # Target attributed
+    TA_BICYCLES = 0x05          # Target attributed
+    TA_DRONES = 0x06            # Target attributed
+    TA_UNKNOWN_8 = 0x08         # Target attributed
+    TA_SMALL_BOATS = 0x09       # Target attributed
+    TA_MEDIUM_BOAT = 0x0A       # Target attributed
+    TA_LARGE_BOAT = 0x0B        # Target attributed
 
     def __init__(self):
+        self._fields = []
         self.type_name = "RM_Message"
         self.start_id = None
         self.type = None
         self.length = None
         self.pkt_num = None
         self.checksum = None
-        self._fields = []
 
     def define(self, name, size, order, value) -> RM_Field_Record:
         field = RM_Field_Record(name, size, order, value)
         self._fields.append(field)
         return field
+
+    def add_field_list(self, field_list):
+        pass
 
     def print(self, msg):
         print("{0}: {1}".format(self.type_name, msg))
@@ -175,35 +195,66 @@ class RMM_Radar_Net_Address_Status (RM_Message):
 class RM_Track_Data (RM_Message):
     def __init__(self):
         super().__init__()
-        self.track_lot         = self.define("Track lot",                      2, self.BE, 0x0000)
-        self.time_reserved     = self.define("reserved (time)",                1, self.BE, 0x00)
-        self.time_hour         = self.define("Hour",                           1, self.BE, 0x00)
-        self.time_minutes      = self.define("Minutes",                        1, self.BE, 0x00)
-        self.time_seconds      = self.define("Seconds",                        1, self.BE, 0x00)
-        self.time_milliseconds = self.define("Milliseconds",                   2, self.BE, 0x0000)
-        self.normal_angle      = self.define("Formation surface normal angle", 2, self.BE, 0x0000)
+        self.track_lot         = self.define("Track lot",                      2, self.BE, 0x0000)  # 1 to 256
+        self.reserved_8        = self.define("reserved 8",                     1, self.BE, 0x00)
+        self.time_hour         = self.define("Hour",                           1, self.BE, 0x00)    # 0 to 23
+        self.time_minutes      = self.define("Minutes",                        1, self.BE, 0x00)    # 0 to 59
+        self.time_seconds      = self.define("Seconds",                        1, self.BE, 0x00)    # 0 to 59
+        self.time_milliseconds = self.define("Milliseconds",                   2, self.BE, 0x0000)  # 0 to 999
+        self.antenna_angle     = self.define("Antenna angle!?, gr/100",        2, self.BE, 0x0000)  # 0 to 360 gr
         self.reserved_16_18    = self.define("reserved 16~18",                 3, self.BE, 0x000000)
+        self.track_status      = self.define("Track status",                   1, self.BE, self.TS_TWS)
+        self.distance          = self.define("Distance!, m",                   2, self.BE, 0x0000)  # 0 to 30000 m
+        self.azimuth           = self.define("Azimuth!, gr/100",               2, self.BE, 0x0000)  # 0 to 360 gr
+        self.pitch             = self.define("Pitch (reserved)",               2, self.BE, 0x0000)  # -150 to 1500 mil
+        self.speed             = self.define("Speed!, m/s/5",                  2, self.BE, 0x0000)  # 0 to 500 m/s
+        self.heading           = self.define("Heading!, gr/100",               2, self.BE, 0x0000)  # 0 to 360 gr
+        self.course_shortcut   = self.define("Course shortcut (reserved)",     2, self.BE, 0x0000)  # 0 to 30000 m
+        self.radial_speed      = self.define("Radial speed, m/s/10",           2, self.BE, 0x0000)  # -500 to 500 m/s
+        self.target_attributes = self.define("Target attributes",              1, self.BE, self.TA_UNKNOWN)
+        self.track_markings    = self.define("Track markings",                 1, self.BE, 0x00)
+        self.track_length      = self.define("Track length",                   2, self.BE, 0x0000)
+        pass
+
+    def set_track_status(self, n_of_tracking_targets, track_status):
+        self.track_markings = track_status & 0x07 + ((n_of_tracking_targets & 0x1F) << 3)
+        pass
+
+    def set_track_markings(self, end_of_track, track_acceptance, track_quality):
+        self.track_markings = track_quality & 0x1F + ((track_acceptance & 0x01) << 5) + ((end_of_track & 0x01) << 6)
         pass
 
 
+# create RMM_Track_Message first, add RM_Track_Data then
 class RMM_Track_Message (RM_Message):
-    def __init__(self, number_of_targets, tracks: [RM_Track_Data]):
+    def __init__(self, tracks: [RM_Track_Data]):
         super().__init__()
+        self.tracks = []
+        number_of_targets = len(tracks) & 0xFF
         self.type_name = "RMM_Track_Message"
         self.start_id             = self.define("Start identification",      1, self.BE, 0xAA)
         self.type                 = self.define("Message type",              1, self.BE, 0x76)
         self.length               = self.define("Message length",            2, self.BE, 10+32*number_of_targets)
-        self.pkt_num              = self.define("Packet number",             2, self.BE, 0x0000)
-        self.number_of_targets    = self.define("Number of targets",         2, self.BE, number_of_targets)
-        self.tracks = []
+        self.pkt_num              = self.define("Packet number",             1, self.BE, 0x00)  # only 1 byte?
+        self.number_of_targets    = self.define("Number of targets",         1, self.BE, number_of_targets)
         for i in range(0, number_of_targets):
-            self.tracks.append(RM_Track_Data())
+            self._add_track(deepcopy(tracks[i]), i)  # we want to avoid references here
         self.backups              = self.define("backups",                   3, self.BE, 0)
         self.checksum             = self.define("Checksum",                  1, self.BE, 0x00)
+        pass
+
+    def _add_track(self, track: RM_Track_Data, i: int):
+        self.tracks.append(track)
+        self.define(track.type_name+" --------------- "+str(i), 0, self.BE, 0)
+        for field in track._fields:
+            self._fields.append(field)
+        pass
 
 
 #############################
 if __name__ == "__main__":
+    import time
+
     msg1 = RMM_Radar_Net_Address_Setup(radar_net_port=0x1234, radar_net_ip=0x7f000001,
                                        terminal_net_port=0x3421, terminal_net_ip=0x7f000002,
                                        saving_order=RM_Message.BIND)
@@ -224,3 +275,18 @@ if __name__ == "__main__":
     msg.print("This message: ")
     msg.update()
     msg.print("Updated message: ")
+
+    start_time = time.time()
+    tracks = []
+    for i in range(0, 4):
+        track = RM_Track_Data()
+        track.track_lot = i*10+1
+        tracks.append(track)
+    msg_track = RMM_Track_Message(tracks)
+    end_time = time.time()
+    msg_track.print("This message: ")
+    msg_track.update()
+    msg_track.print("Updated message: ")
+    print('RMM_Track_Message create time: ', end_time-start_time)
+
+
