@@ -2,15 +2,24 @@ from math import fmod, cos, sin, sqrt, asin, acos
 from random import random
 
 
-# class Point_3D_Polar:
-#     pass
-
+#  dwh coordinates
+#
+#  h
+#  ^
+#  |    w
+#  |   /|
+#  |  /
+#  | /
+#  |/
+# -+-----------> d
+# /|
+#
 
 class Point_3D:
     def __init__(self, d, w, h):
-        self.d = d  # distance aka X
-        self.w = w  # width aka Y
-        self.h = h  # height aka Z
+        self.d = d  # distance aka X-horizontal, positive -  to right
+        self.w = w  # width aka Y-isometric, positive - away
+        self.h = h  # height aka Z-vertical, positive - up
 
     def print(self, msg=None):
         if msg is None:
@@ -45,7 +54,7 @@ class Point_3D:
 class Point_3D_Polar:
     pi = 3.14159
 
-    def __init__(self, radius, azimuth, elevation):
+    def __init__(self, radius=0.0, azimuth=0.0, elevation=0.0):
         self.r = radius     # radius, keep always positive
         self.a = azimuth    # azimuth, rad, keep between 0..+360
         self.e = elevation  # elevation, rad (do not confuse with inclination), keep between -90..+90
@@ -112,7 +121,7 @@ class Point_3D_Polar:
         if self.a < 0:
             self.a = self.a + 2*3.14159
         self.e = asin(sin_e)
-        pass
+        return self
 
     def return_point_3d(self) -> Point_3D:
         d = self.r*cos(self.a)*cos(self.e)

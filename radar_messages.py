@@ -16,6 +16,27 @@ class RM_Field_Record:
         print("{0}{1:28} size={2:>3},  value=0x{3:X}".format(ident, self.name+":", self.size, self.value))
         pass
 
+    def set(self, val):
+        val_int = int(val)
+        if self.size == 1:
+            self.value = val_int & 0xFF
+        elif self.size == 2:
+            self.value = val_int & 0xFFFF
+        elif self.size == 4:
+            self.value = val_int & 0xFFFFFFFF
+        elif self.size == 3:
+            self.value = val_int & 0xFFFFFF
+        elif self.size == 0:
+            pass
+        else:
+            mask = 0xFFFFFFFF
+            for i in range(4, self.size):
+                mask = (mask << 8) | 0xFF
+            self.value = val_int & mask
+        pass
+
+    pass  # class
+
 
 class RM_Message:
     BE = RM_Field_Record.BE
@@ -195,29 +216,29 @@ class RMM_Radar_Net_Address_Status (RM_Message):
 class RM_Track_Data (RM_Message):
     def __init__(self):
         super().__init__()
-        self.track_lot         = self.define("Track lot",                      2, self.BE, 0x0000)  # 1 to 256
-        self.reserved_8        = self.define("reserved 8",                     1, self.BE, 0x00)
-        self.time_hour         = self.define("Hour",                           1, self.BE, 0x00)    # 0 to 23
-        self.time_minutes      = self.define("Minutes",                        1, self.BE, 0x00)    # 0 to 59
-        self.time_seconds      = self.define("Seconds",                        1, self.BE, 0x00)    # 0 to 59
-        self.time_milliseconds = self.define("Milliseconds",                   2, self.BE, 0x0000)  # 0 to 999
-        self.antenna_angle     = self.define("Antenna angle!?, gr/100",        2, self.BE, 0x0000)  # 0 to 360 gr
-        self.reserved_16_18    = self.define("reserved 16~18",                 3, self.BE, 0x000000)
-        self.track_status      = self.define("Track status",                   1, self.BE, self.TS_TWS)
-        self.distance          = self.define("Distance!, m",                   2, self.BE, 0x0000)  # 0 to 30000 m
-        self.azimuth           = self.define("Azimuth!, gr/100",               2, self.BE, 0x0000)  # 0 to 360 gr
-        self.pitch             = self.define("Pitch (reserved)",               2, self.BE, 0x0000)  # -150 to 1500 mil
-        self.speed             = self.define("Speed!, m/s/5",                  2, self.BE, 0x0000)  # 0 to 500 m/s
-        self.heading           = self.define("Heading!, gr/100",               2, self.BE, 0x0000)  # 0 to 360 gr
-        self.course_shortcut   = self.define("Course shortcut (reserved)",     2, self.BE, 0x0000)  # 0 to 30000 m
-        self.radial_speed      = self.define("Radial speed, m/s/10",           2, self.BE, 0x0000)  # -500 to 500 m/s
-        self.target_attributes = self.define("Target attributes",              1, self.BE, self.TA_UNKNOWN)
-        self.track_markings    = self.define("Track markings",                 1, self.BE, 0x00)
-        self.track_length      = self.define("Track length",                   2, self.BE, 0x0000)
+        self.track_lot         = self.define("Track lot",             2, self.BE, 0x0000)  # 1 to 256
+        self.reserved_8        = self.define("reserved 8",            1, self.BE, 0x00)
+        self.time_hour         = self.define("Hour",                  1, self.BE, 0x00)    # 0 to 23
+        self.time_minutes      = self.define("Minutes",               1, self.BE, 0x00)    # 0 to 59
+        self.time_seconds      = self.define("Seconds",               1, self.BE, 0x00)    # 0 to 59
+        self.time_milliseconds = self.define("Milliseconds",          2, self.BE, 0x0000)  # 0 to 999
+        self.zenith_angle      = self.define("Zenith angle!?, .01°",  2, self.BE, 0x0000)  # 0° to 360° in .01°
+        self.reserved_16_18    = self.define("reserved 16~18",        3, self.BE, 0x000000)
+        self.track_status      = self.define("Track status",          1, self.BE, self.TS_TWS)
+        self.distance          = self.define("Distance!, m",          2, self.BE, 0x0000)  # 0 to 30000 m
+        self.azimuth           = self.define("Azimuth!, .01°",        2, self.BE, 0x0000)  # 0° to 360° in .01°
+        self.pitch             = self.define("Pitch (reserved)",      2, self.BE, 0x0000)  # -150 to 1500 mil in *
+        self.speed             = self.define("Speed!, 0.2m/s",        2, self.BE, 0x0000)  # 0 to 500 m/s
+        self.heading           = self.define("Heading!?, .01°",       2, self.BE, 0x0000)  # 0° to 360° in .01°
+        self.course_shortcut   = self.define("Course shortcut (res)", 2, self.BE, 0x0000)  # 0 to 30000 m
+        self.radial_speed      = self.define("Radial speed, 0.1m/s",  2, self.BE, 0x0000)  # -500 to 500 m/s in 0.1 m/s
+        self.target_attributes = self.define("Target attributes",     1, self.BE, self.TA_UNKNOWN)
+        self.track_markings    = self.define("Track markings",        1, self.BE, 0x00)
+        self.track_length      = self.define("Track length",          2, self.BE, 0x0000)
         pass
 
     def set_track_status(self, n_of_tracking_targets, track_status):
-        self.track_markings = track_status & 0x07 + ((n_of_tracking_targets & 0x1F) << 3)
+        self.track_status = track_status & 0x07 + ((n_of_tracking_targets & 0x1F) << 3)
         pass
 
     def set_track_markings(self, end_of_track, track_acceptance, track_quality):
@@ -278,7 +299,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     tracks = []
-    for i in range(0, 4):
+    for i in range(0, 3):
         track = RM_Track_Data()
         track.track_lot = i*10+1
         tracks.append(track)
