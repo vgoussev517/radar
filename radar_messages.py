@@ -38,7 +38,47 @@ class RM_Field_Record:
     pass  # class
 
 
-class RM_Message:
+class RM_Fields:  # just a group of fields
+    def __init__(self):
+        self._fields = []
+        self.type_name = "RM_Fields"
+
+    def define(self, name, size, order, value) -> RM_Field_Record:
+        field = RM_Field_Record(name, size, order, value)
+        self._fields.append(field)
+        return field
+
+    def calc_length(self) -> int:
+        length = 0
+        for field in self._fields:
+            length = length + field.size
+        return length
+
+    def print(self, msg):
+        print("{0}: {1}".format(self.type_name, msg))
+        print("  actual Length={0} (0x{0:X})".format(self.calc_length()))
+        for field in self._fields:
+            field.print("  ")
+        pass
+
+
+class RM_Message (RM_Fields):
+    START_ID = 0xAA
+    MT_NET_ADDR_SETUP = 0x5C      # message type
+    MT_NORTH_CORNER_SETUP = 0x53  # message type
+    MT_PARAMETER_SETUP = 0x52     # message type
+    MT_TX_SWITCH_CTRL = 0x54      # message type
+    MT_NET_ADDR_STATUS = 0x79     # message type
+    MT_TRACK_MESSAGE = 0x76       # message type
+    MT_NEW = 0x00                 # message type (for new packets)
+    MLEN_NET_ADDR_SETUP = 32      # message length
+    MLEN_NORTH_CORNER_SETUP = 16    # message length
+    MLEN_PARAMETER_SETUP = 24       # message length
+    MLEN_TX_SWITCH_CTRL = 8         # message length
+    MLEN_NET_ADDR_STATUS = 32       # message length
+    MLEN_TRACK_MESSAGE = 10         # message length
+    MLEN_NEW = 0                    # message length (for new packets)
+    MLEN_TARGET = 32                # length of target data
     BE = RM_Field_Record.BE
     LE = RM_Field_Record.LE
     NO_BIND = 0x00     # saving order
@@ -75,20 +115,15 @@ class RM_Message:
     TA_LARGE_BOAT = 0x0B        # Target attributed
 
     def __init__(self):
-        self._fields = []
+        super().__init__()
         self.type_name = "RM_Message"
-        self.start_id = None
-        self.type = None
-        self.length = None
-        self.pkt_num = None
+        self.start_id =  self.define("Start identification", 1, RM_Field_Record.BE, RM_Message.START_ID)
+        self.type =      self.define("Message type",         1, RM_Field_Record.BE, RM_Message.MT_NEW)
+        self.length =    self.define("Message length",       2, RM_Field_Record.BE, RM_Message.MLEN_NEW)
+        # self.checksum =  self.define("Checksum",             1, RM_Field_Record.BE, 0x00)
         self.checksum = None
 
-    def define(self, name, size, order, value) -> RM_Field_Record:
-        field = RM_Field_Record(name, size, order, value)
-        self._fields.append(field)
-        return field
-
-    def add_field_list(self, field_list):
+    def add_fields(self, fields: RM_Fields):
         pass
 
     def print(self, msg):
@@ -98,12 +133,6 @@ class RM_Message:
         for field in self._fields:
             field.print("  ")
         pass
-
-    def calc_length(self) -> int:
-        length = 0
-        for field in self._fields:
-            length = length + field.size
-        return length
 
     def calc_checksum(self) -> int:
         checksum = 0
@@ -120,10 +149,63 @@ class RM_Message:
         self.checksum.value = self.calc_checksum()
         pass
 
-    def pack(self) -> bytearray:
+    def pack(self) -> bytes:
+        byte_msg = bytearray(self.length.value)
+        i = 0
+        for field in self._fields:
+            # field.print("pack(self): ")  # !!!
+            val = field.value
+            if field.size == 1:
+                byte_msg[i] = val & 0xFF
+                # print("  i={0}, byte_msg[j]={1}, val={2}".format(i, byte_msg[i], val))
+                i += 1
+            elif field.size == 0:
+                pass
+            else:
+                if field.order == RM_Field_Record.LE:
+                    for j in range(i, i+field.size, 1):
+                        byte_msg[j] = val & 0xFF
+                        val = val >> 8
+                else:
+                    for j in range(i+field.size-1, i-1, -1):
+                        byte_msg[j] = val & 0xFF
+                        # print("  j={0}, byte_msg[j]={1}, val={2}".format(j, byte_msg[j], val))
+                        val = val >> 8
+                i = i + field.size
+        if i != self.length.value:
+            print("ERROR: RM_Message.pack(): the length field ({0}) is not equal to the actual length ({1})".format(
+                self.length.value, i
+            ))
+        return byte_msg
         pass
 
-    def unpack(self, x: bytearray):
+    def unpack(self, byte_msg: bytes):
+        i = 0
+        for field in self._fields:
+            # field.print("unpack(before): ")  # !!!
+            if field.size == 1:
+                field.value = byte_msg[i]
+                # print("  i={0}, byte_msg[i]={1}, val={2}".format(i, byte_msg[i], field.value))
+                i += 1
+            elif field.size == 0:
+                pass
+            else:
+                val = 0
+                if field.order == RM_Field_Record.LE:
+                    for j in range(i+field.size-1, i-1, -1):
+                        val = (val << 8) + byte_msg[j]
+                        # print("  j={0}, byte_msg[j]={1}, val={2}".format(j, byte_msg[j], val))
+                else:
+                    for j in range(i, i+field.size, 1):
+                        val = (val << 8) + byte_msg[j]
+                        # print("  j={0}, byte_msg[j]={1}, val={2}".format(j, byte_msg[j], val))
+                field.value = val
+                i = i + field.size
+            # field.print("unpack(after): ")  # !!!
+        if i != self.length.value:
+            print("ERROR: RM_Message.pack(): the length field ({0}) is not equal to the actual length ({1})".format(
+                self.length.value, i
+            ))
         pass
 
 
@@ -133,17 +215,17 @@ class RMM_Radar_Net_Address_Setup (RM_Message):
     def __init__(self, radar_net_port, radar_net_ip, terminal_net_port, terminal_net_ip, saving_order):
         super().__init__()
         self.type_name = "RMM_Radar_Net_Address_Setup"
-        self.start_id             = self.define("Start identification", 1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",         1, self.BE, 0x5C)
-        self.length               = self.define("Message length",       2, self.BE, 32)
-        self.pkt_num              = self.define("Packet number",        2, self.BE, 0x0000)
-        self.radar_net_port       = self.define("Radar net port",       2, self.BE, radar_net_port)
-        self.radar_net_ip         = self.define("Radar net ip",         4, self.BE, radar_net_ip)
-        self.terminal_net_port    = self.define("Terminal net port",    2, self.BE, terminal_net_port)
-        self.terminal_net_ip      = self.define("Terminal net ip",      4, self.LE, terminal_net_ip)
-        self.saving_order         = self.define("Saving order",         1, self.BE, saving_order )
-        self.backups              = self.define("backups",             12, self.BE, 0)
-        self.checksum             = self.define("Checksum",             1, self.BE, 0x00)
+        # self.start_id
+        self.type.set(RM_Message.MT_NET_ADDR_SETUP)
+        self.length.set(RM_Message.MLEN_NET_ADDR_SETUP)
+        self.pkt_num              = self.define("Packet number",        2, RM_Field_Record.BE, 0x0000)
+        self.radar_net_port       = self.define("Radar net port",       2, RM_Field_Record.BE, radar_net_port)
+        self.radar_net_ip         = self.define("Radar net ip",         4, RM_Field_Record.BE, radar_net_ip)
+        self.terminal_net_port    = self.define("Terminal net port",    2, RM_Field_Record.BE, terminal_net_port)
+        self.terminal_net_ip      = self.define("Terminal net ip",      4, RM_Field_Record.LE, terminal_net_ip)
+        self.saving_order         = self.define("Saving order",         1, RM_Field_Record.BE, saving_order )
+        self.backups              = self.define("backups",             12, RM_Field_Record.BE, 0)
+        self.checksum             =  self.define("Checksum",            1, RM_Field_Record.BE, 0x00)
 
 
 # Saving messages in the main north corner
@@ -151,15 +233,15 @@ class RMM_Radar_North_Corner_Setup (RM_Message):
     def __init__(self, north_corner, saving_method, saving_order):
         super().__init__()
         self.type_name = "RMM_Radar_North_Corner_Setup"
-        self.start_id             = self.define("Start identification", 1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",         1, self.BE, 0x53)
-        self.length               = self.define("Message length",       2, self.BE, 16)
-        self.pkt_num              = self.define("Packet number",        2, self.BE, 0x0000)
-        self.north_corner         = self.define("North Corner",         2, self.BE, north_corner)
-        self.saving_method        = self.define("Saving method",        1, self.BE, saving_method)
-        self.saving_order         = self.define("Saving order",         1, self.BE, saving_order)
-        self.backups              = self.define("backups",              5, self.BE, 0)
-        self.checksum             = self.define("Checksum",             1, self.BE, 0x00)
+        # self.start_id
+        self.type.set(RM_Message.MT_NORTH_CORNER_SETUP)
+        self.length.set(RM_Message.MLEN_NORTH_CORNER_SETUP)
+        self.pkt_num              = self.define("Packet number",        2, RM_Field_Record.BE, 0x0000)
+        self.north_corner         = self.define("North Corner",         2, RM_Field_Record.BE, north_corner)
+        self.saving_method        = self.define("Saving method",        1, RM_Field_Record.BE, saving_method)
+        self.saving_order         = self.define("Saving order",         1, RM_Field_Record.BE, saving_order)
+        self.backups              = self.define("backups",              5, RM_Field_Record.BE, 0)
+        self.checksum             =  self.define("Checksum",            1, RM_Field_Record.BE, 0x00)
 
 
 # Radar parameter setting
@@ -167,18 +249,18 @@ class RMM_Radar_Parameter_Setup (RM_Message):
     def __init__(self, scene, frequency, phase_sweep_start, phase_sweep_end, saving_order):
         super().__init__()
         self.type_name = "RMM_Radar_Parameter_Setup"
-        self.start_id             = self.define("Start identification",      1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",              1, self.BE, 0x52)
-        self.length               = self.define("Message length",            2, self.BE, 24)
-        self.pkt_num              = self.define("Packet number",             2, self.BE, 0x0000)
-        self.azimuth_scan_mode    = self.define("Azimuth scan mode (3 lsb)", 1, self.BE, self.PHASE & 0x07)
-        self.scene                = self.define("Radar scene (3 lsb)",       1, self.BE, scene & 0x07)
-        self.frequency            = self.define("Radar frequency (4 lsb)",   1, self.BE, frequency & 0x0F)
-        self.phase_sweep_start    = self.define("Phase sweep start",         2, self.BE, phase_sweep_start)
-        self.phase_sweep_end      = self.define("Phase sweep end",           2, self.BE, phase_sweep_end)
-        self.saving_order         = self.define("Saving order",              1, self.BE, saving_order)
-        self.backups              = self.define("backups",                   9, self.BE, 0)
-        self.checksum             = self.define("Checksum",                  1, self.BE, 0x00)
+        # self.start_id
+        self.type.set(RM_Message.MT_PARAMETER_SETUP)
+        self.length.set(RM_Message.MLEN_PARAMETER_SETUP)
+        self.pkt_num              = self.define("Packet number",             2, RM_Field_Record.BE, 0x0000)
+        self.azimuth_scan_mode    = self.define("Azimuth scan mode (3 lsb)", 1, RM_Field_Record.BE, RM_Message.PHASE & 0x07)
+        self.scene                = self.define("Radar scene (3 lsb)",       1, RM_Field_Record.BE, scene & 0x07)
+        self.frequency            = self.define("Radar frequency (4 lsb)",   1, RM_Field_Record.BE, frequency & 0x0F)
+        self.phase_sweep_start    = self.define("Phase sweep start",         2, RM_Field_Record.BE, phase_sweep_start)
+        self.phase_sweep_end      = self.define("Phase sweep end",           2, RM_Field_Record.BE, phase_sweep_end)
+        self.saving_order         = self.define("Saving order",              1, RM_Field_Record.BE, saving_order)
+        self.backups              = self.define("backups",                   9, RM_Field_Record.BE, 0)
+        self.checksum             =  self.define("Checksum",                 1, RM_Field_Record.BE, 0x00)
 
 
 # Transmitting switch control
@@ -186,12 +268,12 @@ class RMM_Radar_Tx_Switch_Control (RM_Message):
     def __init__(self, transmit_switch):
         super().__init__()
         self.type_name = "RMM_Radar_Tx_Switch_Control"
-        self.start_id             = self.define("Start identification",      1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",              1, self.BE, 0x54)
-        self.length               = self.define("Message length",            2, self.BE, 8)
-        self.pkt_num              = self.define("Packet number",             2, self.BE, 0x0000)
-        self.transmit_switch      = self.define("Transmit switch (1 lsb)",   1, self.BE, transmit_switch)
-        self.checksum             = self.define("Checksum",                  1, self.BE, 0x00)
+        # self.start_id
+        self.type.set(RM_Message.MT_TX_SWITCH_CTRL)
+        self.length.set(RM_Message.MLEN_TX_SWITCH_CTRL)
+        self.pkt_num              = self.define("Packet number",             2,  RM_Field_Record.BE, 0x0000)
+        self.transmit_switch      = self.define("Transmit switch (1 lsb)",   1, RM_Field_Record.BE, transmit_switch)
+        self.checksum             =  self.define("Checksum",                 1, RM_Field_Record.BE, 0x00)
 
 
 # ----------------------- from Radar ---------------------------------------------
@@ -200,41 +282,41 @@ class RMM_Radar_Net_Address_Status (RM_Message):
     def __init__(self, radar_net_port, radar_net_ip, terminal_net_port, terminal_net_ip):
         super().__init__()
         self.type_name = "RMM_Radar_Net_Address_Status"
-        self.start_id             = self.define("Start identification", 1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",         1, self.BE, 0x79)
-        self.length               = self.define("Message length",       2, self.BE, 32)
-        self.pkt_num              = self.define("Packet number",        2, self.BE, 0x0000)
-        self.radar_net_port       = self.define("Radar net port",       2, self.BE, radar_net_port)
-        self.radar_net_ip         = self.define("Radar net ip",         4, self.BE, radar_net_ip)
-        self.terminal_net_port    = self.define("Terminal net port",    2, self.BE, terminal_net_port)
-        self.terminal_net_ip      = self.define("Terminal net ip",      4, self.LE, terminal_net_ip)
-        self.backups              = self.define("backups",             13, self.BE, 0)
-        self.checksum             = self.define("Checksum",             1, self.BE, 0x00)
+        # self.start_id
+        self.type.set(RM_Message.MT_NET_ADDR_STATUS)
+        self.length.set(RM_Message.MLEN_NET_ADDR_STATUS)
+        self.pkt_num              = self.define("Packet number",        2, RM_Field_Record.BE, 0x0000)
+        self.radar_net_port       = self.define("Radar net port",       2, RM_Field_Record.BE, radar_net_port)
+        self.radar_net_ip         = self.define("Radar net ip",         4, RM_Field_Record.BE, radar_net_ip)
+        self.terminal_net_port    = self.define("Terminal net port",    2, RM_Field_Record.BE, terminal_net_port)
+        self.terminal_net_ip      = self.define("Terminal net ip",      4, RM_Field_Record.LE, terminal_net_ip)
+        self.backups              = self.define("backups",             13, RM_Field_Record.BE, 0)
+        self.checksum             =  self.define("Checksum",            1, RM_Field_Record.BE, 0x00)
 
 
 # Track Message
-class RM_Track_Data (RM_Message):
+class RM_Track_Data (RM_Fields):
     def __init__(self):
         super().__init__()
-        self.track_lot         = self.define("Track lot",             2, self.BE, 0x0000)  # 1 to 256
-        self.reserved_8        = self.define("reserved 8",            1, self.BE, 0x00)
-        self.time_hour         = self.define("Hour",                  1, self.BE, 0x00)    # 0 to 23
-        self.time_minutes      = self.define("Minutes",               1, self.BE, 0x00)    # 0 to 59
-        self.time_seconds      = self.define("Seconds",               1, self.BE, 0x00)    # 0 to 59
-        self.time_milliseconds = self.define("Milliseconds",          2, self.BE, 0x0000)  # 0 to 999
-        self.zenith_angle      = self.define("Zenith angle!?, .01°",  2, self.BE, 0x0000)  # 0° to 360° in .01°
-        self.reserved_16_18    = self.define("reserved 16~18",        3, self.BE, 0x000000)
-        self.track_status      = self.define("Track status",          1, self.BE, self.TS_TWS)
-        self.distance          = self.define("Distance!, m",          2, self.BE, 0x0000)  # 0 to 30000 m
-        self.azimuth           = self.define("Azimuth!, .01°",        2, self.BE, 0x0000)  # 0° to 360° in .01°
-        self.pitch             = self.define("Pitch (reserved)",      2, self.BE, 0x0000)  # -150 to 1500 mil in *
-        self.speed             = self.define("Speed!, 0.2m/s",        2, self.BE, 0x0000)  # 0 to 500 m/s
-        self.heading           = self.define("Heading!?, .01°",       2, self.BE, 0x0000)  # 0° to 360° in .01°
-        self.course_shortcut   = self.define("Course shortcut (res)", 2, self.BE, 0x0000)  # 0 to 30000 m
-        self.radial_speed      = self.define("Radial speed, 0.1m/s",  2, self.BE, 0x0000)  # -500 to 500 m/s in 0.1 m/s
-        self.target_attributes = self.define("Target attributes",     1, self.BE, self.TA_UNKNOWN)
-        self.track_markings    = self.define("Track markings",        1, self.BE, 0x00)
-        self.track_length      = self.define("Track length",          2, self.BE, 0x0000)
+        self.track_lot         = self.define("Track lot",             2, RM_Field_Record.BE, 0x0000)  # 1 to 256
+        self.reserved_8        = self.define("reserved 8",            1, RM_Field_Record.BE, 0x00)
+        self.time_hour         = self.define("Hour",                  1, RM_Field_Record.BE, 0x00)    # 0 to 23
+        self.time_minutes      = self.define("Minutes",               1, RM_Field_Record.BE, 0x00)    # 0 to 59
+        self.time_seconds      = self.define("Seconds",               1, RM_Field_Record.BE, 0x00)    # 0 to 59
+        self.time_milliseconds = self.define("Milliseconds",          2, RM_Field_Record.BE, 0x0000)  # 0 to 999
+        self.zenith_angle      = self.define("Zenith angle!?, .01°",  2, RM_Field_Record.BE, 0x0000)  # 0° to 360° in .01°
+        self.reserved_16_18    = self.define("reserved 16~18",        3, RM_Field_Record.BE, 0x000000)
+        self.track_status      = self.define("Track status",          1, RM_Field_Record.BE, RM_Message.TS_TWS)
+        self.distance          = self.define("Distance!, m",          2, RM_Field_Record.BE, 0x0000)  # 0 to 30000 m
+        self.azimuth           = self.define("Azimuth!, .01°",        2, RM_Field_Record.BE, 0x0000)  # 0° to 360° in .01°
+        self.pitch             = self.define("Pitch (reserved)",      2, RM_Field_Record.BE, 0x0000)  # -150 to 1500 mil in *
+        self.speed             = self.define("Speed!, 0.2m/s",        2, RM_Field_Record.BE, 0x0000)  # 0 to 500 m/s
+        self.heading           = self.define("Heading!?, .01°",       2, RM_Field_Record.BE, 0x0000)  # 0° to 360° in .01°
+        self.course_shortcut   = self.define("Course shortcut (res)", 2, RM_Field_Record.BE, 0x0000)  # 0 to 30000 m
+        self.radial_speed      = self.define("Radial speed, 0.1m/s",  2, RM_Field_Record.BE, 0x0000)  # -500 to 500 m/s in 0.1 m/s
+        self.target_attributes = self.define("Target attributes",     1, RM_Field_Record.BE, RM_Message.TA_UNKNOWN)
+        self.track_markings    = self.define("Track markings",        1, RM_Field_Record.BE, 0x00)
+        self.track_length      = self.define("Track length",          2, RM_Field_Record.BE, 0x0000)
         pass
 
     def set_track_status(self, n_of_tracking_targets, track_status):
@@ -253,20 +335,20 @@ class RMM_Track_Message (RM_Message):
         self.tracks = []
         number_of_targets = len(tracks) & 0xFF
         self.type_name = "RMM_Track_Message"
-        self.start_id             = self.define("Start identification",      1, self.BE, 0xAA)
-        self.type                 = self.define("Message type",              1, self.BE, 0x76)
-        self.length               = self.define("Message length",            2, self.BE, 10+32*number_of_targets)
-        self.pkt_num              = self.define("Packet number",             1, self.BE, 0x00)  # only 1 byte?
-        self.number_of_targets    = self.define("Number of targets",         1, self.BE, number_of_targets)
+        # self.start_id
+        self.type.set(RM_Message.MT_TRACK_MESSAGE)
+        self.length.set(RM_Message.MLEN_TRACK_MESSAGE+RM_Message.MLEN_TARGET*number_of_targets)
+        self.pkt_num              =  self.define("Packet number",             1, RM_Field_Record.BE, 0x00)  # only 1 byte?
+        self.n_of_targets         =  self.define("Number of targets",         1, RM_Field_Record.BE, number_of_targets)
         for i in range(0, number_of_targets):
             self._add_track(deepcopy(tracks[i]), i)  # we want to avoid references here
-        self.backups              = self.define("backups",                   3, self.BE, 0)
-        self.checksum             = self.define("Checksum",                  1, self.BE, 0x00)
+        self.backups              =  self.define("backups",                   3, RM_Field_Record.BE, 0)
+        self.checksum             =  self.define("Checksum",                  1, RM_Field_Record.BE, 0x00)
         pass
 
     def _add_track(self, track: RM_Track_Data, i: int):
         self.tracks.append(track)
-        self.define(track.type_name+" --------------- "+str(i), 0, self.BE, 0)
+        self.define("Track data --------------- "+str(i), 0, RM_Field_Record.BE, 0)
         for field in track._fields:
             self._fields.append(field)
         pass
@@ -310,4 +392,8 @@ if __name__ == "__main__":
     msg_track.print("Updated message: ")
     print('RMM_Track_Message create time: ', end_time-start_time)
 
+    x = msg_track.pack()
+    print("Packed: ", x)
+    msg_track.unpack(x)
+    msg_track.print("Unpacked: ")
 
