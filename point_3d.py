@@ -112,8 +112,14 @@ class Point_3D_Polar:
     def set_from_point_3d(self, x: Point_3D):
         r = sqrt(x.d*x.d+x.w*x.w+x.h*x.h)
         p = sqrt(x.d*x.d+x.w*x.w)
-        sin_e = x.h/r
-        cos_a = x.d/p
+        if r==0:
+            sin_e = 0.0
+        else:
+            sin_e = x.h / r
+        if p == 0:
+            cos_a = 1
+        else:
+            cos_a = x.d / p
         self.r = r
         self.a = acos(cos_a)
         if x.w < 0:

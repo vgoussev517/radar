@@ -5,9 +5,10 @@ from operator import mod
 
 from PyQt5.QtCore import Qt, QThread
 
+from my_ip_service import UDP_Service_For_Radar
 from point_3d import Point_3D, Point_3D_Polar
 from radar_messages import RMM_Radar_Net_Address_Setup, RM_Message, RMM_Radar_North_Corner_Setup, \
-    RMM_Radar_Parameter_Setup, RMM_Radar_Tx_Switch_Control, RMM_Radar_Net_Address_Status, RM_Track_Data, \
+    RMM_Radar_Parameter_Setup, RMM_Radar_Tx_Switch_Control, RMM_Radar_Net_Address_Status, RM_Target_Data, \
     RMM_Track_Message
 
 
@@ -44,6 +45,13 @@ class My_Radar_Track_Point:
 class My_Radar(QThread):
     def __init__(self):
         super().__init__()
+        # self.radar_ip = "192.168.81.100"
+        # self.radar_port = "4003"
+        # self.office_ip = "192.168.81.101"
+        # self.office_port = "4006"
+        self.ip_service = UDP_Service_For_Radar()
+        self.ip_service.this_ip_port = ("127.0.0.1", 4003)  # is to be local address
+        self.ip_service.that_ip_port = ("127.0.0.2", 4006)
         self.trace_message_tx_period_ms = 50
         self.radar_north_angle = 0.0/180*3.14159
         self.radar_azimuth_scan_angle = 30/180*3.14159            # default azimuth scan mode 0x00
@@ -51,13 +59,11 @@ class My_Radar(QThread):
         self.radar_aperture_end_azimuth = 60/180*3.14159          # aka phase sweep start angle
         self.radar_aperture_start_elevation = -60/180*3.14159     # aka ?
         self.radar_aperture_end_elevation = +60/180*3.14159       # aka ?
-        self.radar_ip = "192.168.81.100"
-        self.radar_port = "4003"
-        self.office_ip = "192.168.81.101"
-        self.office_port = "4006"
         self.radar_tx_switch = RM_Message.ON
         self.radar_working_scene = RM_Message.GRASSLAND
         self.radar_frequency = RM_Message.FP_16G1
+        #
+        self.send_period_ms = 10
         self.track_points = []
         pass
 
@@ -83,7 +89,7 @@ class My_Radar(QThread):
         return True
         pass
 
-    def add_track_point(self, track_id, position: Point_3D, speed: Point_3D):
+    def add_track_point(self, track_id, time_s, position: Point_3D, speed: Point_3D):
         if not self.check_aperture(position):
             return
         found = False
@@ -98,20 +104,19 @@ class My_Radar(QThread):
             track_point.track_lot = track_id
             track_point.track_length = 1
             self.track_points.append(track_point)
-        t = time.time()  # works well because we do not need dates here
         position_polar = Point_3D_Polar().set_from_point_3d(position)
         # position_polar.set_from_point_3d(position)
         spd = sqrt(speed.d*speed.d+speed.w*speed.w+speed.h*speed.h)
         radial_spd = speed.h*sin(position_polar.e) + \
                      speed.d*cos(position_polar.e)*cos(position_polar.a) + \
                      speed.w*cos(position_polar.e)*sin(position_polar.a)  # mathematics may be wrong here !!!
-        track_point.hour = mod(int(t/3600), 24)
-        track_point.min = mod(int(t/60), 60)
-        track_point.sec = mod(int(t), 60)
-        track_point.msec = mod(int(t*1000), 1000)
+        track_point.hour = mod(int(time_s/3600), 24)
+        track_point.min = mod(int(time_s/60), 60)
+        track_point.sec = mod(int(time_s), 60)
+        track_point.msec = mod(int(time_s*1000), 1000)
         track_point.distance = position_polar.r
         track_point.azimuth = position_polar.a
-        track_point.elevation = position_polar.e  # heading == elevation?
+        track_point.elevation = position_polar.e
         track_point.speed = spd
         track_point.radial_speed = radial_spd
         track_point.new_value = True
@@ -124,7 +129,7 @@ class My_Radar(QThread):
         for track_point in self.track_points:
             if track_point.new_value and track_point.valid_value:
                 track_point.new_value = False
-                track_msg_data = RM_Track_Data()
+                track_msg_data = RM_Target_Data()
                 track_msg_data.type_name = "Track"+str(track_point.track_lot)
                 track_msg_data.track_lot.set(track_point.track_lot)
                 track_msg_data.time_hour.set(track_point.hour)
@@ -133,7 +138,7 @@ class My_Radar(QThread):
                 track_msg_data.time_milliseconds.set(track_point.msec)
                 track_msg_data.distance.set(track_point.distance)
                 track_msg_data.azimuth.set(track_point.azimuth*18000/3.14159)  # convert to 0.01 gr
-                track_msg_data.zenith_angle.set(180+track_point.elevation*18000*3.14159)  # convert to 0.01 gr
+                track_msg_data.zenith_angle.set(9000+track_point.elevation*18000/3.14159)  # convert to 0.01 gr
                 track_msg_data.set_track_status(
                     n_of_tracking_targets=1,
                     track_status=RM_Message.TS_TWS
@@ -153,22 +158,16 @@ class My_Radar(QThread):
                 tracks_msg_data.append(track_msg_data)
         # if len(tracks_msg_data) == 0:
         #     return None
-        track_msg = RMM_Track_Message(tracks_msg_data)
-        track_msg.update()
-        return track_msg
+        msg = RMM_Track_Message(tracks_msg_data)
+        msg.update()
+        return msg
 
-    def start_ip_service(self):  # start radar IP service
-        pass
-
-    def send_message(self, msg: RM_Message):  # send message to the office
-
-        pass
-
-    def run(self):  # send periodically trace messages
-        self.msleep(self.trace_message_tx_period_ms)
-        track_msg = self.create_track_message()
-        self.send_message(track_msg)
-        pass
+    def run(self):
+        self.ip_service.start_service()
+        while True:
+            msg = self.create_track_message()
+            self.ip_service.send_message(msg)
+            self.msleep(self.send_period_ms)
 
 
 #############################
@@ -176,26 +175,25 @@ if __name__ == "__main__":
     import time
 
     radar = My_Radar()
-    track_msg = radar.create_track_message()
-    track_msg.print("track_msg 000000000000")
-    print()
+    radar.send_period_ms = 100
+    radar.start()
+    print("Radar started!")
 
-    radar.add_track_point(track_id=0, position=Point_3D(1000, 1000, 1000), speed=Point_3D(10, 2, 0))
-    time.sleep(0.010)
-    radar.add_track_point(track_id=1, position=Point_3D(6000, 0, 300), speed=Point_3D(0, 0, 10))
-    time.sleep(0.050)
-    radar.add_track_point(track_id=2, position=Point_3D(6000, 300, 0), speed=Point_3D(0, -10, 0))
-    time.sleep(0.005)
-    radar.add_track_point(track_id=3, position=Point_3D(6000, 0, 0), speed=Point_3D(10, 2, -2))
-    for track in radar.track_points:
-        track.print("AAA")
-    print()
+    i = 0
+    while True:
+        x = 500/2 + 100*sin(3.14/100*i)
+        y = 250/2 + 100*sin(3.14/200*i)
+        z = 250/2 + 100*sin(3.14/300*i)
+        t = time.time()
+        radar.add_track_point(track_id=5, time_s=t, position=Point_3D(x, y, z), speed=Point_3D(10, 2, 0))
+        radar.add_track_point(track_id=7, time_s=t, position=Point_3D(x, z, y), speed=Point_3D(0, 0, 10))
+        i += 1
+        if mod(i, 10) == 0:
+            for point in radar.track_points:
+                point.print("BBB")
+            print()
 
-    track_msg = radar.create_track_message()
+        time.sleep(radar.send_period_ms/1000)
 
-    for track in radar.track_points:
-        track.print("BBB")
-    print()
-    track_msg.print("track_msg")
 
 

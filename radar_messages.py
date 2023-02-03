@@ -295,7 +295,7 @@ class RMM_Radar_Net_Address_Status (RM_Message):
 
 
 # Track Message
-class RM_Track_Data (RM_Fields):
+class RM_Target_Data (RM_Fields):
     def __init__(self):
         super().__init__()
         self.track_lot         = self.define("Track lot",             2, RM_Field_Record.BE, 0x0000)  # 1 to 256
@@ -330,10 +330,10 @@ class RM_Track_Data (RM_Fields):
 
 # create RMM_Track_Message first, add RM_Track_Data then
 class RMM_Track_Message (RM_Message):
-    def __init__(self, tracks: [RM_Track_Data]):
+    def __init__(self, targets: [RM_Target_Data]):
         super().__init__()
-        self.tracks = []
-        number_of_targets = len(tracks) & 0xFF
+        self.targets = []
+        number_of_targets = len(targets) & 0xFF
         self.type_name = "RMM_Track_Message"
         # self.start_id
         self.type.set(RM_Message.MT_TRACK_MESSAGE)
@@ -341,15 +341,15 @@ class RMM_Track_Message (RM_Message):
         self.pkt_num              =  self.define("Packet number",             1, RM_Field_Record.BE, 0x00)  # only 1 byte?
         self.n_of_targets         =  self.define("Number of targets",         1, RM_Field_Record.BE, number_of_targets)
         for i in range(0, number_of_targets):
-            self._add_track(deepcopy(tracks[i]), i)  # we want to avoid references here
+            self._add_target(deepcopy(targets[i]), i)  # we want to avoid references here
         self.backups              =  self.define("backups",                   3, RM_Field_Record.BE, 0)
         self.checksum             =  self.define("Checksum",                  1, RM_Field_Record.BE, 0x00)
         pass
 
-    def _add_track(self, track: RM_Track_Data, i: int):
-        self.tracks.append(track)
+    def _add_target(self, target: RM_Target_Data, i: int):
+        self.targets.append(target)
         self.define("Track data --------------- "+str(i), 0, RM_Field_Record.BE, 0)
-        for field in track._fields:
+        for field in target._fields:
             self._fields.append(field)
         pass
 
@@ -380,12 +380,12 @@ if __name__ == "__main__":
     msg.print("Updated message: ")
 
     start_time = time.time()
-    tracks = []
+    targets = []
     for i in range(0, 3):
-        track = RM_Track_Data()
-        track.track_lot = i*10+1
-        tracks.append(track)
-    msg_track = RMM_Track_Message(tracks)
+        target = RM_Target_Data()
+        target.track_lot = i*10+1
+        targets.append(target)
+    msg_track = RMM_Track_Message(targets)
     end_time = time.time()
     msg_track.print("This message: ")
     msg_track.update()
