@@ -8,36 +8,33 @@ from operator import mod
 from PyQt5.QtCore import Qt, QThread
 from PyQt5.QtWidgets import QApplication
 
+
 from my_environment import My_Environment, Lissajous_3D_Gen
-from my_ip_service import UDP_Service_For_Radar
 from my_radar import My_Radar
 from my_widgets import My_Main_Window
 from point_3d import Point_3D, Point_3D_Polar
 
 # logger = logging.getLogger(__name__)
-logger = logging.getLogger("my_ip_service")
-logger.setLevel(logging.DEBUG)
-log_formatter = logging.Formatter("%(asctime)s: %(filename)s: %(levelname)s: %(message)s")
-#
-log_file_handler = logging.FileHandler(f"{__file__}.log", mode='w')
-log_file_handler.setLevel(logging.DEBUG)
-log_file_handler.setFormatter(log_formatter)
-logger.addHandler(log_file_handler)
-#
-log_cons_handler = logging.StreamHandler()
-log_cons_handler.setLevel(logging.INFO)
-log_cons_handler.setFormatter(log_formatter)
-logger.addHandler(log_cons_handler)
-# установка уровня логирования конкретно этого обработчика
-
-
-
-# print(my_ip_service_logger)
+# log_formatter = logging.Formatter("%(asctime)s: %(filename)s: %(levelname)s: %(message)s")
+# #
+# log_file_handler = logging.FileHandler(f"{__file__}.log", mode='w')
+# log_file_handler.setLevel(logging.DEBUG)
+# log_file_handler.setFormatter(log_formatter)
+# logger.addHandler(log_file_handler)
+# #
+# log_cons_handler = logging.StreamHandler()
+# log_cons_handler.setLevel(logging.INFO)
+# log_cons_handler.setFormatter(log_formatter)
+# logger.addHandler(log_cons_handler)
 
 
 #############################
 if __name__ == "__main__":
     import time
+
+    import my_ip_service
+    logger = my_ip_service.set_logger(level=logging.INFO, file_name=f"{__file__}.log", console_level=logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     app = QApplication(sys.argv)
 
@@ -63,16 +60,21 @@ if __name__ == "__main__":
     print("Viewer created")
 
     radar = My_Radar()
-    radar.ip_service.this_ip_port = ("127.0.0.1", 4003)  # is to be local address
-    radar.ip_service.that_ip_port = ("127.0.0.2", 4006)
-    radar.send_period_ms = 100
+    radar.listen_connection_timeout = 2
+    radar.radar_ip_address = ("127.0.0.3", 4003)
+    radar.office_ip_address = ("127.0.0.6", 4006)
+    radar.radar_message_send_period_ms = 100
+    radar.ip_service.ping_timeout_sec = 10.0
+    radar.ip_service.recv_timeout_sec = 1.0
+
     radar.start()
-    print("Radar started!")
+    print("Radar started")
 
     i = 0
-    delay_ms = int(radar.send_period_ms/2)
+    environment_update_delay_ms = int(radar.radar_message_send_period_ms/2-1)  # actually, this delay are independent
     start_time = time.time()
     this_time = time.time()
+    dot_rate = int (1000/radar.radar_message_send_period_ms)
     while True:
         # logger.info("Loop")
         last_time = this_time
@@ -85,11 +87,13 @@ if __name__ == "__main__":
                 position=env.targets_gens[k].get_position(),
                 speed=env.targets_gens[k].get_speed()
             )
-        if mod(i, 20) == 0:
-            for point in radar.track_points:
-                point.print("BBB")
-            print()
+        if mod(i, dot_rate) == 0:
+            # for point in radar.track_points:
+            #     point.print("{0}".format(i))
+            print(".", end="")
+            sys.stdout.flush()
+            pass
         QApplication.processEvents()
-        QThread.msleep(delay_ms)
+        QThread.msleep(environment_update_delay_ms)
         i += 1
 

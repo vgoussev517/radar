@@ -1,4 +1,6 @@
 # Radar messages structures
+import time
+
 from copy import deepcopy
 from math import sqrt, sin, cos
 from operator import mod
@@ -45,14 +47,9 @@ class My_Radar_Track_Point:
 class My_Radar(QThread):
     def __init__(self):
         super().__init__()
-        # self.radar_ip = "192.168.81.100"
-        # self.radar_port = "4003"
-        # self.office_ip = "192.168.81.101"
-        # self.office_port = "4006"
-        self.ip_service = UDP_Service_For_Radar()
-        self.ip_service.this_ip_port = ("127.0.0.1", 4003)  # is to be local address
-        self.ip_service.that_ip_port = ("127.0.0.2", 4006)
-        self.trace_message_tx_period_ms = 50
+        # radar parameters - might be setup with ip messages
+        self.radar_ip_address = ("127.0.0.1", 10003)  # is to be local address
+        self.office_ip_address = ("127.0.0.2", 10006)
         self.radar_north_angle = 0.0/180*3.14159
         self.radar_azimuth_scan_angle = 30/180*3.14159            # default azimuth scan mode 0x00
         self.radar_aperture_start_azimuth = (360-60)/180*3.14159  # aka phase sweep start angle
@@ -62,8 +59,13 @@ class My_Radar(QThread):
         self.radar_tx_switch = RM_Message.ON
         self.radar_working_scene = RM_Message.GRASSLAND
         self.radar_frequency = RM_Message.FP_16G1
-        #
-        self.send_period_ms = 10
+        # radar communication parameters and class members
+        self.radar_message_send_period_ms = 10
+        self.ip_service = UDP_Service_For_Radar()
+        self.ip_service.ping_timeout_sec = 5.0     # listen_for_connections() message timeout
+        self.ip_service.recv_timeout_sec = 1.0     # recv() message timeout
+        self.ip_service.client_forget_count = 10  # the number of ping timeout to forget a client
+        # class members - usually, they should not be use outside
         self.track_points = []
         pass
 
@@ -90,7 +92,9 @@ class My_Radar(QThread):
         pass
 
     def add_track_point(self, track_id, time_s, position: Point_3D, speed: Point_3D):
+        # print("Adding point to track {0}".format(track_id))
         if not self.check_aperture(position):
+            # print("Point {0} is out of aperture".format(track_id))
             return
         found = False
         track_point: My_Radar_Track_Point
@@ -98,8 +102,10 @@ class My_Radar(QThread):
             if track_point.track_lot == track_id:
                 track_point.track_length += 1
                 found = True
+                # print("{0}: Track {1} is found".format(time.time(), track_id))
                 break
         if not found:
+            # print("{0}: Track {1} NOT found!!!".format(time.time(), track_id))
             track_point = My_Radar_Track_Point()
             track_point.track_lot = track_id
             track_point.track_length = 1
@@ -121,6 +127,7 @@ class My_Radar(QThread):
         track_point.radial_speed = radial_spd
         track_point.new_value = True
         track_point.valid_value = True
+        # print("{0}: Track {1} point added".format(time.time(), track_id))
         pass
 
     def create_track_message(self) -> RMM_Track_Message:
@@ -156,6 +163,13 @@ class My_Radar(QThread):
                 )
                 track_msg_data.track_length.set(track_point.track_length)
                 tracks_msg_data.append(track_msg_data)
+            else:
+                # print("{0}: my_radar: track_point {1}: new_value={2}, valid_value={3}".format(
+                #     time.time(),
+                #     track_point.track_lot, track_point.new_value, track_point.valid_value)
+                # )
+                # exit(-1)
+                pass
         # if len(tracks_msg_data) == 0:
         #     return None
         msg = RMM_Track_Message(tracks_msg_data)
@@ -163,16 +177,19 @@ class My_Radar(QThread):
         return msg
 
     def run(self):
-        self.ip_service.start_service()
+        # self.ip_service.start_server()
+        self.ip_service.this_ip_address = ("127.0.0.1", self.radar_ip_address[1])  # is to be local address
+        self.ip_service.that_ip_address = self.office_ip_address
+        self.ip_service.start_multi_client_server()
         while True:
             msg = self.create_track_message()
             self.ip_service.send_message(msg)
-            self.msleep(self.send_period_ms)
+            self.msleep(self.radar_message_send_period_ms)
 
 
 #############################
 if __name__ == "__main__":
-    import time
+    # import time
 
     radar = My_Radar()
     radar.send_period_ms = 100

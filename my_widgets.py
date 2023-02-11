@@ -42,8 +42,12 @@ class My_Main_Window(QMainWindow):
     def closeEvent(self, event):
         print("User has clicked the red x on the main window")
         event.accept()
-        # Thread.
         sys.exit()
+        # self.on_close()
+        # self.close()
+
+    def on_close(self):
+        pass
 
 
 class My_Track_Graph_Widget(QGraphicsView):
