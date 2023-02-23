@@ -4,6 +4,7 @@ import googlemaps
 from googlemaps.maps import StaticMapMarker
 from googlemaps.maps import StaticMapPath
 
+# google does not provide no-key access!!!
 
 class My_Map:
     def __init__(self):

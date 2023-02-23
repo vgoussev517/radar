@@ -1,6 +1,8 @@
 # Python projects
 *.log
 *.pyc
+universe_pics/
+universe_data/
 venv/
 .idea/
 __pycache__/
