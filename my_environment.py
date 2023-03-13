@@ -45,7 +45,9 @@ class Lissajous_3D_Gen:
 # class My_Environment(Agent):
 class My_Environment:
     def __init__(self, name):
-        self.scene_box = Point_3D(500, 250, 250)
+        self.scene_min = Point_3D(0, 0, 0)
+        self.scene_size = Point_3D(500, 250, 250)
+        self.view_scale = 1.0
         self.target_speed_factor = 1.0
         self.track_tail_length = 100
         #
@@ -57,7 +59,9 @@ class My_Environment:
         pass
 
     def create(self):
-        self.viewer = My_3D_Viewer_Widget(self.scene_box)
+        self.viewer = My_3D_Viewer_Widget(
+            scene_min=self.scene_min, scene_size=self.scene_size, view_scale=self.view_scale
+        )
         pass
 
     def create_random_target(
@@ -74,8 +78,8 @@ class My_Environment:
         else:
             target_color = color
         #
-        center = self.scene_box.scale(0.20).add(self.scene_box.scale(0.50).random())
-        amplitude = self.scene_box.scale(amplitude_scale).random()
+        center = self.scene_min.add(self.scene_size.scale(0.50).random()).add(self.scene_size.scale(0.20))
+        amplitude = self.scene_size.scale(amplitude_scale).random()
         freq = Point_3D(afreq_scale, afreq_scale, afreq_scale).random().add(Point_3D(0.01, 0.01, 0.01))
         phase = Point_3D(3.14, 3.14, 3.14).random()
         gen = Lissajous_3D_Gen(target_name+"_Gen", center, amplitude, freq, phase)
@@ -123,8 +127,8 @@ if __name__ == "__main__":
     env.create_random_target(afreq_scale=0.1)
     env.create_random_target(afreq_scale=0.1)
 
-    center = env.scene_box.mul(Point_3D(3/4, 1/2, 1/2))
-    amplitude = env.scene_box.mul(Point_3D(1/8, 1/4, -1/4))
+    center = env.scene_min.add(env.scene_size.mul(Point_3D(3/4, 1/2, 1/2)))
+    amplitude = env.scene_size.mul(Point_3D(1/8, 1/4, -1/4))
     afreq = Point_3D(0.2, 0.4/3, 0.4)
     phase = Point_3D(3.14/4, +0.1, +0.1)
     # afreq = Point_3D(0.8/3, 0.4/3, 0.4)

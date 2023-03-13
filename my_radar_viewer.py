@@ -26,7 +26,9 @@ class My_Radar_Viewer(Agent):
         self.ip_client.recv_timeout_sec = 2.0
         self.ip_client.ping_period_sec = 2.5
         #
-        self.viewer_3d = My_3D_Viewer_Widget(Point_3D(500, 250, 250))
+        self.viewer_3d = My_3D_Viewer_Widget(
+            scene_min=Point_3D(0, 0, 0), scene_size=Point_3D(500, 250, 250), view_scale=1.0
+        )
         self.window = My_Main_Window("Office")
         self.window.setCentralWidget(self.viewer_3d)
         #
@@ -77,7 +79,7 @@ class My_Radar_Viewer(Agent):
             a = target.azimuth.value/18000*3.14159
             e = (target.zenith_angle.value-9000)/18000*3.14159
             target_pos_polar = Point_3D_Polar(r, a, e)
-            target_pos = target_pos_polar.return_point_3d()
+            target_pos = target_pos_polar.point_3d()
             if target_id not in self.viewer_tracks_dict:
                 target_color = QColor(QColor.fromHsvF(random(), 0.9, 0.9))
                 viewer_track = self.viewer_3d.add_new_track("X"+str(target_id), target_color, target_pos)

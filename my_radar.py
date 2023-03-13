@@ -74,7 +74,7 @@ class My_Radar(QThread):
         #     self.radar_aperture_start_azimuth * 180 / 3.14159, self.radar_aperture_end_azimuth * 180 / 3.14159,
         #     self.radar_aperture_start_elevation * 180 / 3.14159, self.radar_aperture_end_elevation * 180 / 3.14159
         # ))
-        position_polar = Point_3D_Polar().set_from_point_3d(position)
+        position_polar = Point_3D_Polar().move_to_point_3d(position)
         # position_polar.print("Point position")
         if self.radar_aperture_start_azimuth < self.radar_aperture_end_azimuth:
             if (position_polar.a < self.radar_aperture_start_azimuth) and \
@@ -110,7 +110,7 @@ class My_Radar(QThread):
             track_point.track_lot = track_id
             track_point.track_length = 1
             self.track_points.append(track_point)
-        position_polar = Point_3D_Polar().set_from_point_3d(position)
+        position_polar = Point_3D_Polar().move_to_point_3d(position)
         # position_polar.set_from_point_3d(position)
         spd = sqrt(speed.d*speed.d+speed.w*speed.w+speed.h*speed.h)
         radial_spd = speed.h*sin(position_polar.e) + \
